@@ -32,6 +32,14 @@ classifiers = [  # Optional
 dependencies = [ # Optional
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-mock",
+    "pytest-cov",
+    "ruff",
+]
+
 [tool.setuptools.dynamic]
 version = {attr = "cilantro.__version__"}
 
