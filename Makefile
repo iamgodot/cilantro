@@ -6,7 +6,7 @@ help: # Prints help for targets with comments
 install: # Install dependencies for development
 	pip install --upgrade pip
 	pip install -e .
-	pip install -r requirements/dev.txt
+	pip install -r requirements-dev.txt
 
 clean: # Remove cache and build files
 	find . -iname "*__pycache__" | xargs rm -rf
