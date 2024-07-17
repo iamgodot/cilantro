@@ -50,6 +50,16 @@ def test_headers_internal():
         headers_mutable["accept"]
 
 
+def test_init_headers_with_dict():
+    headers = Headers({"Host": "localhost", "Accept": "text/html"})
+    assert headers.raw == [
+        (b"Host", b"localhost"),
+        (b"Accept", b"text/html"),
+    ]
+    assert headers.get("host") == "localhost"
+    assert headers.get("accept") == "text/html"
+
+
 def test_headers_read():
     raw = [
         (b"Host", b"localhost"),

@@ -12,15 +12,23 @@ class Cilantro:
 
 
 class Headers(Mapping):
-    def __init__(self, headers: list[tuple[bytes, bytes]]):
-        self._headers = headers
+    def __init__(self, headers: list[tuple[bytes, bytes]] | dict[str, str]):
+        if isinstance(headers, dict):
+            self._headers = [(k.encode(), v.encode()) for k, v in headers.items()]
+        else:
+            self._headers = headers
+
         self._dict = defaultdict(list)
-        for b_key, b_value in headers:
-            key, value = b_key.decode().lower(), b_value.decode().lower()
-            self._dict[key].append(value)
-        # Duplicates could exist
-        for key, values in self._dict.items():
-            self._dict[key] = list(dict.fromkeys(values))
+        if isinstance(headers, dict):
+            for k, v in headers.items():
+                self._dict[k.lower()].append(v)
+        else:
+            for b_key, b_value in headers:
+                key, value = b_key.decode().lower(), b_value.decode().lower()
+                self._dict[key].append(value)
+            # Duplicates could exist
+            for key, values in self._dict.items():
+                self._dict[key] = list(dict.fromkeys(values))
 
     def __getitem__(self, key: str) -> list[str]:
         if key not in self:
