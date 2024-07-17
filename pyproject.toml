@@ -38,6 +38,7 @@ dev = [
     "pytest-mock",
     "pytest-cov",
     "ruff",
+    "anyio[trio]",
 ]
 
 [tool.setuptools.dynamic]
