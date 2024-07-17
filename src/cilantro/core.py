@@ -1,6 +1,8 @@
 from collections import defaultdict
 from collections.abc import Mapping
+from json import dumps
 from typing import Any, Iterator
+from urllib.parse import quote
 
 
 class Cilantro:
@@ -91,3 +93,45 @@ class MutableHeaders(Headers):
         values = self.list(key)
         del self[key]
         return values
+
+
+async def response(
+    content: bytes | str | dict,
+    *,
+    content_type: str = "text/plain",
+    status: int = 200,
+    headers: dict[str, str] | None = None,
+    charset: str = "utf-8",
+) -> dict[str, int | list[tuple[bytes, bytes]] | bytes]:
+    if headers is None:
+        headers = {}
+
+    if 300 <= status < 400:
+        if not isinstance(content, str):
+            raise ValueError("Redirect url must be a string")
+        headers["location"] = quote(content, safe=":/%#?=")
+        content = ""
+
+    match content:
+        case bytes():
+            body = content
+        case str():
+            body = content.encode(charset)
+        case dict():
+            body = dumps(content, ensure_ascii=False, indent=None).encode(charset)
+        case _:
+            body = b""
+
+    if isinstance(content, dict):
+        headers["content-type"] = "application/json"
+    elif content:
+        headers["content-type"] = f"{content_type}; charset={charset}"
+
+    if status >= 200 and status not in (204, 304):
+        headers.setdefault("content-length", str(len(body)))
+
+    return {
+        "status": status,
+        "headers": MutableHeaders(headers).raw,
+        "body": body,
+    }

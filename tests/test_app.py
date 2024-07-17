@@ -1,6 +1,7 @@
 import pytest
 
 from cilantro import Cilantro, Headers, MutableHeaders
+from cilantro.core import response
 
 
 def test_cilantro():
@@ -106,3 +107,117 @@ def test_headers_write():
 
     assert headers.pop("accept") == ["application/json"]
     assert headers.get("accept") is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ["content", "options", "status", "headers", "body"],
+    [
+        (
+            None,
+            {},
+            200,
+            [
+                (b"content-length", b"0"),
+            ],
+            b"",
+        ),
+        (
+            b"Hello world!",
+            {},
+            200,
+            [
+                (b"content-type", b"text/plain; charset=utf-8"),
+                (b"content-length", b"12"),
+            ],
+            b"Hello world!",
+        ),
+        (
+            "Hello world!",
+            {},
+            200,
+            [
+                (b"content-type", b"text/plain; charset=utf-8"),
+                (b"content-length", b"12"),
+            ],
+            b"Hello world!",
+        ),
+        (
+            "<h1>Hello world!</h1>",
+            {"content_type": "text/html"},
+            200,
+            [
+                (b"content-type", b"text/html; charset=utf-8"),
+                (b"content-length", b"21"),
+            ],
+            b"<h1>Hello world!</h1>",
+        ),
+        (
+            {"message": "Hello world!"},
+            {},
+            200,
+            [
+                (b"content-type", b"application/json"),
+                (b"content-length", b"27"),
+            ],
+            b'{"message": "Hello world!"}',
+        ),
+        (
+            "https://github.com/iamgodot/cilantro",
+            {"status": 308},
+            308,
+            [
+                (b"location", b"https://github.com/iamgodot/cilantro"),
+                (b"content-length", b"0"),
+            ],
+            b"",
+        ),
+    ],
+)
+async def test_response_content(content, options, status, headers, body):
+    res = await response(content, **options)
+    assert res == {
+        "status": status,
+        "headers": headers,
+        "body": body,
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ["headers_in", "headers_out"],
+    [
+        (
+            None,
+            [
+                (b"content-type", b"text/plain; charset=utf-8"),
+                (b"content-length", b"12"),
+            ],
+        ),
+        (
+            {},
+            [
+                (b"content-type", b"text/plain; charset=utf-8"),
+                (b"content-length", b"12"),
+            ],
+        ),
+        (
+            {"foo": "bar"},
+            [
+                (b"foo", b"bar"),
+                (b"content-type", b"text/plain; charset=utf-8"),
+                (b"content-length", b"12"),
+            ],
+        ),
+    ],
+)
+async def test_response_headers(headers_in, headers_out):
+    res = await response("Hello world!", headers=headers_in)
+    assert res["headers"] == headers_out
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("content", [b"Hello world!", {"message": "Hello world!"}])
+async def test_response_redirect_url(content):
+    with pytest.raises(ValueError):
+        await response(content, status=308)
