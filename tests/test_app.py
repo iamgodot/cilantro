@@ -29,6 +29,7 @@ def test_headers_internal():
     assert "host" in headers_mutable and "accept" in headers_mutable
 
     assert headers == headers_mutable
+    assert headers != {"host": ["localhost"], "accept": ["text/html", "text/plain"]}
 
     assert (
         str(headers)
@@ -96,6 +97,7 @@ def test_headers_with_duplicate_input():
 
 def test_headers_write():
     headers = MutableHeaders([])
+    headers.append("accept", "text/html")
     headers.append("accept", "text/html")
     headers.append("accept", "text/plain")
     assert headers.list("accept") == ["text/html", "text/plain"]

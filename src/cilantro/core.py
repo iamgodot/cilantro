@@ -49,7 +49,9 @@ class Headers(Mapping):
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, Headers):
             return False
-        return self._dict == other._dict
+        return len(self._dict) == len(other._dict) and all(
+            sorted(self[key]) == sorted(other[key]) for key in self._dict
+        )
 
     def __str__(self) -> str:
         return str(self.raw)
