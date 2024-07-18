@@ -1,8 +1,11 @@
 from collections import defaultdict
 from collections.abc import Mapping
 from json import dumps
+from logging import getLogger
 from typing import Any, Iterator
 from urllib.parse import quote
+
+LOGGER = getLogger(__name__)
 
 
 class Cilantro:
@@ -176,6 +179,9 @@ async def response(
         case dict():
             body = dumps(content, ensure_ascii=False, indent=None).encode(charset)
         case _:
+            LOGGER.warning(
+                "Unsupported content type: %s for %s", type(content), content
+            )
             body = b""
 
     if isinstance(content, dict):
