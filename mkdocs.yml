@@ -1,0 +1,28 @@
+site_name: Cilantro
+site_url: https://iamgodot.com/cilantro
+site_description: An async Python web framework.
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - navigation.tabs
+    - navigation.tabs.sticky
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            docstring_options:
+              returns_multiple_items: false
+            show_source: false
+            separate_signature: true
+            show_root_heading: true
+
+nav:
+  - Overview: index.md
+  - API Reference: api.md
+  - Changelog: CHANGELOG.md

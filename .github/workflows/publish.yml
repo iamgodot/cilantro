@@ -36,3 +36,8 @@ jobs:
       - uses: actions/download-artifact@v4
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+  docs-publish:
+    name: Publish documentation
+    steps:
+      - run: pip install mkdocs-material
+      - run: mkdocs gh-deploy --force
