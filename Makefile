@@ -23,4 +23,5 @@ format: # Format code by black and ruff
 	ruff check --fix .
 
 test: clean lint # Clean cache, check lint and run tests
+	mypy src tests
 	pytest -v --cov=src --cov-report term-missing tests

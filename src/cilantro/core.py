@@ -129,7 +129,8 @@ class MutableHeaders(Headers):
         return values
 
 
-Scope = Event = dict[str, Any]
+Scope = dict[str, Any]
+Event = dict[str, Any]
 Receive = Callable[[], Awaitable[Event]]
 Send = Callable[[Event], Awaitable[None]]
 
