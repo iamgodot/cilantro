@@ -1,9 +1,10 @@
 from collections import defaultdict
-from collections.abc import Mapping
-from json import dumps
+from collections.abc import Awaitable, Callable, Mapping
+from functools import cached_property
+from json import dumps, loads
 from logging import getLogger
 from typing import Any, Iterator
-from urllib.parse import quote
+from urllib.parse import SplitResult, parse_qs, quote, urlsplit
 
 LOGGER = getLogger(__name__)
 
@@ -128,8 +129,106 @@ class MutableHeaders(Headers):
         return values
 
 
+Scope = Event = dict[str, Any]
+Receive = Callable[[], Awaitable[Event]]
+Send = Callable[[Event], Awaitable[None]]
+
+
+class Request:
+    """
+    This Request class abstracts all the data from the incoming request.
+
+    Initialization:
+        Initializes with a scope, receive and send functions following the ASGI spec.
+
+    Equality:
+        Two Request objects are equal if they are the same object.
+    """
+
+    def __init__(self, scope: Scope, receive: Receive, send: Send):
+        self._scope = scope
+        self._receive = receive
+        self._send = send
+        self._is_disconnected = False
+
+    def __eq__(self, other: Any):
+        return self is other
+
+    def __str__(self) -> str:
+        return f'Request("{self.url}")'
+
+    @property
+    def method(self) -> str:
+        return self._scope["method"]
+
+    @cached_property
+    def _components(self) -> SplitResult:
+        scheme = self._scope.get("scheme", "http")
+        path = self._scope["path"]
+        server = self._scope.get("server")
+
+        header_host = self.headers.get("host")
+        if header_host:
+            _url = f"{scheme}://{header_host}{path}"
+        elif not server:
+            _url = path
+        else:
+            host, port = server
+            colon_port = "" if port in (80, 443) else f":{port}"
+            _url = f"{scheme}://{host}{colon_port}{path}"
+
+        query_string = self._scope["query_string"].decode()
+        return urlsplit(f"{_url}?{query_string}")
+
+    @property
+    def url(self) -> str:
+        return self._components.geturl()
+
+    @property
+    def scheme(self) -> str:
+        return self._components.scheme
+
+    @property
+    def path(self) -> str:
+        return self._components.path
+
+    @property
+    def http_version(self) -> str:
+        return self._scope["http_version"]
+
+    @cached_property
+    def headers(self) -> Headers:
+        return Headers(self._scope["headers"])
+
+    @property
+    def query_params(self) -> dict[str, list[str]]:
+        return parse_qs(self._components.query)
+
+    async def get_body(self) -> bytes:
+        if not hasattr(self, "_body"):
+            chunks = []
+            more_body = True
+            while more_body:
+                event = await self._receive()
+                if event["type"] == "http.request":
+                    body = event.get("body", b"")
+                    more_body = event.get("more_body", False)
+                    chunks.append(body)
+                else:
+                    self._is_disconnected = True
+                    raise RuntimeError("Request is disconnected")
+            self._body = b"".join(chunks)
+        return self._body
+
+    async def get_json(self) -> dict:
+        if not hasattr(self, "_json"):
+            body = await self.get_body()
+            self._json = loads(body.decode())
+        return self._json
+
+
 async def response(
-    content: bytes | str | dict,
+    content: bytes | str | dict | None,
     *,
     content_type: str = "text/plain",
     status: int = 200,
@@ -139,7 +238,7 @@ async def response(
     """Generates a response dictionary.
 
     Args:
-        content (bytes, str, dict): Content of response body.
+        content (bytes, str, dict, optional): Content of response body.
         content_type (str): Defaults to "text/plain".
         status (int): Defaults to 200.
         headers (dict, optional): Defaults to None.
@@ -169,7 +268,7 @@ async def response(
         if not isinstance(content, str):
             raise ValueError("Redirect url must be a string")
         headers["location"] = quote(content, safe=":/%#?=")
-        content = ""
+        content = None
 
     match content:
         case bytes():
@@ -179,17 +278,14 @@ async def response(
         case dict():
             body = dumps(content, ensure_ascii=False, indent=None).encode(charset)
         case _:
-            LOGGER.warning(
-                "Unsupported content type: %s for %s", type(content), content
-            )
             body = b""
 
     if isinstance(content, dict):
         headers["content-type"] = "application/json"
-    elif content:
+    elif content is not None:
         headers["content-type"] = f"{content_type}; charset={charset}"
 
-    if status >= 200 and status not in (204, 304):
+    if status >= 200 and status != 204:
         headers.setdefault("content-length", str(len(body)))
 
     return {

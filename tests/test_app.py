@@ -1,6 +1,6 @@
 import pytest
 
-from cilantro import Cilantro, Headers, MutableHeaders
+from cilantro import Cilantro, Headers, MutableHeaders, Request
 from cilantro.core import response
 
 
@@ -174,6 +174,13 @@ def test_headers_write():
             ],
             b"",
         ),
+        (
+            None,
+            {"status": 204},
+            204,
+            [],
+            b"",
+        ),
     ],
 )
 async def test_response_content(content, options, status, headers, body):
@@ -223,3 +230,152 @@ async def test_response_headers(headers_in, headers_out):
 async def test_response_redirect_url(content):
     with pytest.raises(ValueError):
         await response(content, status=308)
+
+
+@pytest.mark.anyio
+async def test_request_basic():
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/index",
+        "query_string": b"foo=bar&foo=bat&a=b",
+        "headers": [
+            (b"host", b"localhost"),
+        ],
+    }
+
+    request_body_completed = False
+
+    async def receive():
+        nonlocal request_body_completed
+        if request_body_completed:
+            return {"type": "http.disconnect"}
+        request_body_completed = True
+        return {
+            "type": "http.request",
+            "body": b"Hello world!",
+            "more_body": False,
+        }
+
+    async def send(_):
+        pass
+
+    request = Request(scope, receive, send)
+    assert request.method == "GET"
+    assert request.url == "http://localhost/index?foo=bar&foo=bat&a=b"
+    assert request.scheme == "http"
+    assert request.path == "/index"
+    assert request.http_version == "1.1"
+    assert request.headers.get("host") == "localhost"
+    assert request.query_params == {"foo": ["bar", "bat"], "a": ["b"]}
+
+    request_copy = Request(scope, receive, send)
+    assert request != request_copy
+
+    assert str(request) == 'Request("http://localhost/index?foo=bar&foo=bat&a=b")'
+
+    body = await request.get_body()
+    assert body == b"Hello world!"
+    # Cache is used this time
+    body = await request.get_body()
+    assert body == b"Hello world!"
+
+
+@pytest.mark.parametrize(
+    ["scheme", "server", "url"],
+    [
+        ["http", ("localhost", 80), "http://localhost/"],
+        ["https", ("localhost", 443), "https://localhost/"],
+        ["http", ("localhost", 8000), "http://localhost:8000/"],
+        ["http", (), "/"],
+    ],
+)
+def test_request_host(scheme, server, url):
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": scheme,
+        "path": "/",
+        "query_string": b"",
+        "headers": [],
+        "server": server,
+    }
+
+    async def receive():
+        return {}
+
+    async def send(_):
+        pass
+
+    request = Request(scope, receive, send)
+    assert request.url == url
+
+
+@pytest.mark.anyio
+async def test_request_disconnected_during_body():
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/",
+        "query_string": b"",
+        "headers": [
+            (b"host", b"localhost"),
+        ],
+    }
+
+    request_body_completed = False
+
+    async def receive():
+        nonlocal request_body_completed
+        if request_body_completed:
+            return {"type": "http.disconnect"}
+        request_body_completed = True
+        return {
+            "type": "http.request",
+            "body": b"Hello world!",
+            "more_body": True,
+        }
+
+    async def send(_):
+        pass
+
+    request = Request(scope, receive, send)
+    with pytest.raises(RuntimeError):
+        await request.get_body()
+
+
+@pytest.mark.anyio
+async def test_request_get_json():
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/",
+        "query_string": b"",
+        "headers": [
+            (b"host", b"localhost"),
+        ],
+    }
+
+    async def receive():
+        return {
+            "type": "http.request",
+            "body": b'{"message": "Hello world!"}',
+            "more_body": False,
+        }
+
+    async def send(_):
+        pass
+
+    request = Request(scope, receive, send)
+    json_body = await request.get_json()
+    assert json_body == {"message": "Hello world!"}
+    # Cache is used this time
+    json_body = await request.get_json()
+    assert json_body == {"message": "Hello world!"}
