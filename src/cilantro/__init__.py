@@ -1,9 +1,9 @@
 from logging.config import dictConfig
 from os import environ
 
-from .core import Cilantro, Headers, MutableHeaders, response
+from .core import Cilantro, Headers, MutableHeaders, Request, response
 
-__all__ = ["Cilantro", "Headers", "MutableHeaders", "response"]
+__all__ = ["Cilantro", "Headers", "MutableHeaders", "Request", "response"]
 
 __version__ = "0.1.0"
 
