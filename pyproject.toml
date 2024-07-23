@@ -41,6 +41,7 @@ dev = [
     "anyio[trio]",
     "mkdocs-material",
     "mkdocstrings[python]",
+    "mypy",
 ]
 
 [tool.setuptools.dynamic]
